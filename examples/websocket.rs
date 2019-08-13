@@ -27,7 +27,7 @@ use std::thread;
 use std::sync::mpsc;
 use cf_ws_v1::WebSocket;
 
-fn subscribe_api_tester(ws: &mut CFWebSocket) {
+fn subscribe_api_tester(ws: &mut WebSocket) {
     ws.subscribe("trade", Some(&["PI_XBTUSD"]));
     ws.subscribe("book", Some(&["PI_XBTUSD"]));
     ws.subscribe("ticker", Some(&["PI_XBTUSD"]));
@@ -43,7 +43,7 @@ fn subscribe_api_tester(ws: &mut CFWebSocket) {
     ws.subscribe_private("notifications_auth");
 }
 
-fn unsubscribe_api_tester(ws: &mut CFWebSocket) {
+fn unsubscribe_api_tester(ws: &mut WebSocket) {
     ws.unsubscribe("trade", Some(&["PI_XBTUSD"]));
     ws.unsubscribe("book", Some(&["PI_XBTUSD"]));
     ws.unsubscribe("ticker", Some(&["PI_XBTUSD"]));
