@@ -75,7 +75,6 @@ fn input() {
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    //let mut ws = WebSocket::new(API_PATH, Some((API_PUBLIC_KEY, API_PRIVATE_KEY)));
     let mut ws = WebSocket::new(API_PATH, API_PUBLIC_KEY, API_PRIVATE_KEY);
 
     println!("-----------------------------------------------------------------");
