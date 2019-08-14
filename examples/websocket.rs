@@ -20,12 +20,20 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-extern crate cf_ws_v1;
+use std::{
+    io::{self, Read},
+    sync::mpsc,
+    thread
+};
 
-use std::io::{self, Read};
-use std::thread;
-use std::sync::mpsc;
 use cf_ws_v1::WebSocket;
+use env_logger;
+use log::info;
+
+
+const API_PATH: &str = "wss://www.cryptofacilities.com/ws/v1";
+const API_PUBLIC_KEY: Option<&str>  = None;
+const API_PRIVATE_KEY: Option<&str> = None;
 
 fn subscribe_api_tester(ws: &mut WebSocket) {
     ws.subscribe("trade", Some(&["PI_XBTUSD"]));
@@ -65,7 +73,10 @@ fn input() {
 }
 
 fn main() {
-    let mut ws = WebSocket::new("wss://www.cryptofacilities.com/ws/v1", None);
+    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    //let mut ws = WebSocket::new(API_PATH, Some((API_PUBLIC_KEY, API_PRIVATE_KEY)));
+    let mut ws = WebSocket::new(API_PATH, API_PUBLIC_KEY, API_PRIVATE_KEY);
 
     println!("-----------------------------------------------------------------");
     println!("*******PRESS ANY KEY TO SUBSCRIBE AND START RECEIVING INFO*******");
@@ -80,8 +91,8 @@ fn main() {
     let t = thread::spawn(move || {
         for msg in ws.feed() {
             if receiver.try_recv().is_ok() { break; }
-            println!("{}", msg.0);
-            println!("{:?}", msg.1);
+            info!("{}", msg.0);
+            info!("{:?}", msg.1);
         }
         ws
     });
