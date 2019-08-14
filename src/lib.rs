@@ -25,6 +25,7 @@ use std::{
         mpsc::{self, Receiver, SyncSender},
     },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use base64;
@@ -34,6 +35,7 @@ use futures::{
     stream::Stream,
     sync::mpsc as async_mpsc,
 };
+use log::info;
 use openssl::{
     sha,
     hash::MessageDigest,
@@ -61,14 +63,14 @@ pub struct WebSocket {
 }
 
 impl WebSocket {
-    pub fn new(ws_url: &str, public_private_keys: Option<(&str, &str)>) -> WebSocket {
+    pub fn new(ws_url: &str, public_key: Option<&str>, private_key: Option<&str>) -> WebSocket {
         let (sender, receiver) = mpsc::sync_channel(1);
         let (sub_sender, sub_receiver) = async_mpsc::channel(0);
         
         let sub_sender_sync = sub_sender.wait();
         
         let mut ws = WebSocket {
-            keys: public_private_keys.map(|(pb, pv)| (pb.to_owned(), pv.to_owned())),
+            keys: public_key.and_then(|pb| private_key.map(|pv| (pb.to_owned(), pv.to_owned()) )),
             ws_url: ws_url.to_owned(),
             challenge: None,
             signed_challenge: None,
@@ -104,6 +106,8 @@ impl WebSocket {
                 }).to_string()
             }
         };
+
+        info!("subscribe to public feed: {}", feed);
         
         let _ = self.sub_sender.send(OwnedMessage::Text(msg));
     }
@@ -125,6 +129,8 @@ impl WebSocket {
             }
         };
         
+        info!("unsubscribe from public feed: {}", feed);
+
         let _ = self.sub_sender.send(OwnedMessage::Text(msg));
     }
 
@@ -143,6 +149,8 @@ impl WebSocket {
             "signed_challenge": self.signed_challenge.as_ref().unwrap(),
         }).to_string();
 
+        info!("subscribe to private feed: {}", feed);
+
         let _ = self.sub_sender.send(OwnedMessage::Text(msg));
         None
     }
@@ -159,6 +167,8 @@ impl WebSocket {
             "original_challenge": self.challenge.as_ref().unwrap(),
             "signed_challenge": self.signed_challenge.as_ref().unwrap(),
         }).to_string();
+
+        info!("unsubscribe from private feed: {}", feed);
 
         let _ = self.sub_sender.send(OwnedMessage::Text(msg));
         None
@@ -181,6 +191,9 @@ impl WebSocket {
     // blocks until challenge event arrives
     fn wait_for_challenge(&self) -> String {
         let mut challenge = String::new();
+
+        info!("waiting for challenge");
+
         for msg in self.receiver.iter() {
             if msg.0 == "challenge" {
                 challenge = msg.1["message"].as_str().unwrap().to_owned();
@@ -218,6 +231,7 @@ impl WebSocket {
     // async listener 
     fn listen(&mut self, sender: SyncSender<(String, serde_json::Value)>, sub_receiver: async_mpsc::Receiver<OwnedMessage>) {
         let mut runtime = tokio::runtime::Builder::new()
+            //.keep_alive(Some(Duration::from_secs(10)))
             .blocking_threads(1)
             .core_threads(1)
             .build()
