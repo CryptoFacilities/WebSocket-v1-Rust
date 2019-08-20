@@ -25,7 +25,6 @@ use std::{
         mpsc::{self, Receiver, SyncSender},
     },
     thread::{self, JoinHandle},
-    time::Duration,
 };
 
 use base64;
@@ -42,7 +41,7 @@ use openssl::{
     pkey::PKey,
     sign::Signer,
 };
-use serde_json::json;
+use serde::{Serialize, Deserialize};
 use tokio;
 use websocket::{
     client::{
@@ -52,13 +51,364 @@ use websocket::{
     result::WebSocketError,
 };
 
+#[derive(Serialize, Debug)]
+struct SubscribeMsg<'a> {
+    event: &'a str,
+    feed: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    product_ids: Option<&'a [&'a str]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    api_key: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    original_challenge: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signed_challenge: Option<&'a str>,
+}
+
+#[derive(Serialize, Debug)]
+struct ChallengeMsg<'a> {
+    event: &'a str,
+    api_key: &'a str,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Header {
+    pub feed: String,
+    #[serde(default)]
+    pub product_ids: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Trade {
+    #[serde(flatten)]
+    pub header: Header, 
+    #[serde(default)]
+    pub product_id: Option<String>,
+    pub side: String,
+    #[serde(rename="type")]
+    pub ty: String,
+    pub seq: u64,
+    pub time: u64,
+    pub qty: f64,
+    pub price: f64,
+}
+
+fn trade_feed() -> String { "trade".to_owned() }
+
+#[derive(Deserialize, Debug)]
+pub struct TradeSnapshot {
+    #[serde(flatten)]
+    pub header: Header, 
+    pub trades: Vec<Trade>,
+}
+
+fn trade_snapshot_feed() -> String { "trade_snapshot".to_owned() }
+
+#[derive(Deserialize, Debug)]
+pub struct BookValue {
+    #[serde(default)]
+    pub feed: Option<String>,
+    #[serde(default)]
+    pub product_id: Option<String>,
+    #[serde(default)]
+    pub side: Option<String>,
+    #[serde(default)]
+    pub seq: Option<u64>,
+    pub price: f64,
+    pub qty: f64,
+}
+
+fn book_feed() -> String { "book".to_owned() }
+
+#[derive(Deserialize, Debug)]
+pub struct BookSnapshot {
+    pub feed: String,
+    pub product_id: String,
+    pub seq: u64,
+    pub timestamp: u64,
+    pub bids: Vec<BookValue>,
+    pub asks: Vec<BookValue>,
+}
+
+fn book_snapshot_feed() -> String { "book_snapshot".to_owned() }
+
+
+#[derive(Deserialize, Debug)]
+pub struct TickerLite {
+    pub feed: String,
+    pub product_id: String,
+    pub bid: f64,
+    pub ask: f64,
+    pub change: f64,
+    pub premium: f64,
+    pub volume: f64,
+    pub tag: String,
+    pub pair: String,
+    pub dtm: i64,
+    #[serde(rename="maturityTime")]
+    pub maturity_time: u64
+}
+
+fn ticker_lite_feed() -> String { "ticker_lite".to_owned() }
+
+#[derive(Deserialize, Debug)]
+pub struct Ticker {
+    #[serde(flatten)]
+    pub header: Header,
+    pub bid_size: f64,
+    pub ask_size: f64,
+    pub leverage: String,
+    pub index: f64,
+    pub last: f64,
+    pub time: f64,
+    #[serde(rename="openInterest")]
+    pub open_interest: f64,
+    #[serde(rename="markPrice")]
+    pub mark_price: f64,
+    #[serde(rename="maturityTime")]
+    pub maturity_time: f64,
+    #[serde(rename="fundingRate")]
+    pub funding_rate: f64,
+    #[serde(rename="relativeFundingRatePrediction")]
+    pub relative_funding_rate_prediction: f64,
+    #[serde(rename="fundingRatePrediction")]
+    pub funding_rate_prediction: f64,
+    #[serde(rename="nextFundingRateTime")]
+    pub next_funding_rate_time: f64,
+}
+
+fn ticker_feed() -> String { "ticker".to_owned() }
+
+#[derive(Deserialize, Debug)]
+pub struct Heartbeat {
+    #[serde(flatten)]
+    pub header: Header,
+    pub time: u64,
+}
+
+fn challenge_feed() -> String { "challenge".to_owned() }
+
+#[derive(Deserialize, Debug)]
+pub struct Challenge {
+    #[serde(default="challenge_feed")]
+    pub feed: String,
+    pub event: String,
+    pub message: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Subscribed {
+    pub event: String, 
+    #[serde(flatten)]
+    pub header: Header, 
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Error {
+    pub event: String,
+    pub message: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Version {
+    pub event: String,
+    pub version: u64,
+}
+
+
+//// Private ////
+
+#[derive(Deserialize, Debug)]
+pub struct MarginAccount {
+    name: String,
+    balance: f64,
+    pnl: f64,
+    pv: f64,
+    am: f64,
+    im: f64,
+    mm: f64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AccountBalancesAndMargins {
+    feed: String,
+    account: String,
+    seq: u64,
+    margin_accounts: Vec<MarginAccount>
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Log {
+    id: u64,
+    date: String,
+    asset: String,
+    info: String,
+    booking_uid: String,
+    margin_account: String,
+    old_balance: f64,
+    new_balance: f64,
+    old_average_entry_price: f64,
+    new_average_entry_price: f64,
+    trade_price: f64,
+    mark_price: f64,
+    fee: f64,
+    execution: String,
+    collateral: String,
+    funding_rate: f64,
+    realised_funding: f64
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AccountLog {
+    feed: String,
+    logs: Vec<Log>
+}
+
+
+#[derive(Deserialize, Debug)]
+pub struct DepositWithdrawal {
+    uid: String,
+    time: String,
+    amount: f64,
+    unit: String,
+    receiving_address: String,
+    status: String,
+    confirmations: u64,
+    tx_reference: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DepositsWithdrawals {
+    feed: String,
+    elements: Vec<DepositWithdrawal>
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Fill {
+    instrument: String,
+    time: String,
+    price: f64,
+    seq: u64,
+    buy: bool,
+    qty: f64,
+    order_id: String,
+    fill_id: String,
+    fill_type: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Fills {
+    feed: String,
+    account: String,
+    fills: Vec<Fill>
+}
+
+
+#[derive(Deserialize, Debug)]
+pub struct Position {
+    instrument: String,
+    balance: f64,
+    entry_price: f64,
+    mark_price: f64,
+    index_price: f64,
+    pnl: f64,
+    liquidation_threashold: f64,
+    return_on_equity: f64,
+    effective_leverage: f64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenPositions {
+    feed: String,
+    account: String,
+    positions: Vec<Position>,
+}
+
+
+#[derive(Deserialize, Debug)]
+pub struct Order {
+    instrument: String,
+    time: u64,
+    qty: f64,
+    filled: f64,
+    limit_price: f64,
+    stop_price: f64,
+    #[serde(rename="type")]
+    ty: String,
+    order_id: String,
+    #[serde(default)]
+    cli_order_id: Option<String>,
+    direction: i64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenOrdersSnapshot {
+    feed: String,
+    account: String,
+    orders: Vec<Order>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenOrders {
+    feed: String,
+    is_cancel: bool,
+    reason: String,
+    #[serde(default)]
+    order_id: Option<String>,
+    #[serde(default)]
+    cli_ord_id: Option<String>,
+    #[serde(default)]
+    order: Option<Order>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Notification {
+    id: u64,
+    #[serde(rename = "type")]
+    ty: String,
+    priority: String,
+    note: String,
+    effective_time: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Notifications {
+    feed: String,
+    notifications: Vec<Notification>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Msg {
+    Version(Version),
+    Subscribed(Subscribed),
+    Error(Error),
+    Trade(Trade),
+    TradeSnapshot(TradeSnapshot),
+    Book(BookValue),
+    BookSnapshot(BookSnapshot),
+    Ticker(Ticker),
+    TickerLite(TickerLite),
+    Heartbeat(Heartbeat),
+    Challenge(Challenge),
+    AccountBalancesAndMargins(AccountBalancesAndMargins),
+    AccountLog(AccountLog),
+    DepositsWithdrawals(DepositsWithdrawals),
+    Fills(Fills),
+    OpenPositions(OpenPositions),
+    OpenOrders(OpenOrders),
+    OpenOrdersSnapshot(OpenOrdersSnapshot),
+    Notifications(Notifications),
+}
+
+
 pub struct WebSocket {
     keys: Option<(String, String)>,
     ws_url: String,
     challenge: Option<String>,
     signed_challenge: Option<String>,
     sub_sender: Wait<async_mpsc::Sender<OwnedMessage>>,
-    receiver: Receiver<(String, serde_json::Value)>,
+    receiver: Receiver<Msg>,
     listener: Option<JoinHandle<()>>,
 }
 
@@ -84,28 +434,21 @@ impl WebSocket {
         ws
     }
 
-    pub fn feed(&mut self) -> mpsc::Iter<(String, serde_json::Value)> {
+    pub fn feed(&mut self) -> mpsc::Iter<Msg> {
         self.receiver.iter()
     }
 
     //// public feeds ////
 
     pub fn subscribe(&mut self, feed: &str, products: Option<&[&str]>) { 
-        let msg = match products {
-            Some(ps) => {
-                json!({ 
-                    "event": "subscribe",
-                    "feed": feed,
-                    "product_ids": ps
-                }).to_string()
-            },
-            None => {
-                json!({ 
-                    "event": "subscribe",
-                    "feed": feed
-                }).to_string()
-            }
-        };
+        let msg = serde_json::to_string(&SubscribeMsg {
+            event: "subscribe",
+            feed: feed,
+            product_ids: products,
+            api_key: None,
+            original_challenge: None,
+            signed_challenge: None,
+        }).unwrap();
 
         info!("subscribe to public feed: {}", feed);
         
@@ -113,22 +456,15 @@ impl WebSocket {
     }
 
     pub fn unsubscribe(&mut self, feed: &str, products: Option<&[&str]>) { 
-        let msg = match products {
-            Some(ps) => {
-                json!({ 
-                    "event": "unsubscribe",
-                    "feed": feed,
-                    "product_ids": ps
-                }).to_string()
-            },
-            None => {
-                json!({ 
-                    "event": "unsubscribe",
-                    "feed": feed
-                }).to_string()
-            }
-        };
-        
+        let msg = serde_json::to_string(&SubscribeMsg {
+            event: "unsubscribe",
+            feed: feed,
+            product_ids: products,
+            api_key: None,
+            original_challenge: None,
+            signed_challenge: None,
+        }).unwrap();
+
         info!("unsubscribe from public feed: {}", feed);
 
         let _ = self.sub_sender.send(OwnedMessage::Text(msg));
@@ -141,13 +477,14 @@ impl WebSocket {
             self.sign_challenge()?;
         }
 
-        let msg = json!({ 
-            "event": "subscribe",
-            "feed": feed,
-            "api_key": self.keys.as_ref().map(|(pb, _)| pb).unwrap(),
-            "original_challenge": self.challenge.as_ref().unwrap(),
-            "signed_challenge": self.signed_challenge.as_ref().unwrap(),
-        }).to_string();
+        let msg = serde_json::to_string(&SubscribeMsg {
+            event: "subscribe",
+            feed: feed,
+            product_ids: None,
+            api_key: self.keys.as_ref().map(|(pb, _)| &**pb),
+            original_challenge: self.challenge.as_ref().map(|v| &**v),
+            signed_challenge: self.signed_challenge.as_ref().map(|v| &**v),
+        }).unwrap();
 
         info!("subscribe to private feed: {}", feed);
 
@@ -160,13 +497,14 @@ impl WebSocket {
             self.sign_challenge()?;
         }
 
-        let msg = json!({ 
-            "event": "unsubscribe",
-            "feed": feed,
-            "api_key": self.keys.as_ref().map(|(pb, _)| pb).unwrap(),
-            "original_challenge": self.challenge.as_ref().unwrap(),
-            "signed_challenge": self.signed_challenge.as_ref().unwrap(),
-        }).to_string();
+        let msg = serde_json::to_string(&SubscribeMsg {
+            event: "subscribe",
+            feed: feed,
+            product_ids: None,
+            api_key: self.keys.as_ref().map(|(pb, _)| &**pb),
+            original_challenge: self.challenge.as_ref().map(|v| &**v),
+            signed_challenge: self.signed_challenge.as_ref().map(|v| &**v),
+        }).unwrap();
 
         info!("unsubscribe from private feed: {}", feed);
 
@@ -177,6 +515,7 @@ impl WebSocket {
     // sign challenge request  
     fn sign_challenge(&mut self) -> Option<()> {
         match (self.keys.as_ref(), self.challenge.as_ref()) { 
+            (Some(_), Some(_)) => Some(()),
             (Some((ref pb, ref pv)), None) => { 
                 Self::request_challenge(&mut self.sub_sender, &*pb);
                 let c = self.wait_for_challenge();
@@ -195,20 +534,23 @@ impl WebSocket {
         info!("waiting for challenge");
 
         for msg in self.receiver.iter() {
-            if msg.0 == "challenge" {
-                challenge = msg.1["message"].as_str().unwrap().to_owned();
-                break;
+            match msg {
+                Msg::Challenge(c) => {
+                    challenge = c.message;
+                    break;
+                }
+                _ => {}
             }
         }
         challenge
     }
 
     fn request_challenge(sender: &mut Wait<async_mpsc::Sender<OwnedMessage>>, public_key: &str) {
-        let msg = json!({
-            "event": "challenge",
-            "api_key": public_key,
-        }).to_string();
-        
+        let msg = serde_json::to_string(&ChallengeMsg {
+            event: "challenge",
+            api_key: public_key,
+        }).unwrap();
+
         let _ = sender.send(OwnedMessage::Text(msg));
     }
 
@@ -229,9 +571,8 @@ impl WebSocket {
     }
 
     // async listener 
-    fn listen(&mut self, sender: SyncSender<(String, serde_json::Value)>, sub_receiver: async_mpsc::Receiver<OwnedMessage>) {
+    fn listen(&mut self, sender: SyncSender<Msg>, sub_receiver: async_mpsc::Receiver<OwnedMessage>) {
         let mut runtime = tokio::runtime::Builder::new()
-            //.keep_alive(Some(Duration::from_secs(10)))
             .blocking_threads(1)
             .core_threads(1)
             .build()
@@ -245,17 +586,9 @@ impl WebSocket {
                 stream.filter_map(move |message| {
                     match message {
                         OwnedMessage::Text(data) => { 
-                            if let Ok(d) = serde_json::from_str::<serde_json::Value>(&*data) {
-                                if let Some(event) = d.get("event").and_then(|e| e.as_str()) {
-                                    if event == "challenge" {
-                                        let _ = sender.send((event.to_owned(), d));
-                                    }
-                                }
-                                else if let Some(feed) = d.get("feed").and_then(|f| f.as_str()) {
-                                    let _ = sender.send((feed.to_owned(), d));
-                                }
-                            }
-
+                            serde_json::from_str::<Msg>(&*data).map(|m| {
+                                sender.send(m)
+                            })
                             None
                         },
                         OwnedMessage::Ping(data) => Some(OwnedMessage::Pong(data)),

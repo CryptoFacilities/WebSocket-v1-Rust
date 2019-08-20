@@ -90,8 +90,7 @@ fn main() {
     let t = thread::spawn(move || {
         for msg in ws.feed() {
             if receiver.try_recv().is_ok() { break; }
-            info!("{}", msg.0);
-            info!("{:?}", msg.1);
+            info!("{:?}", msg);
         }
         ws
     });
