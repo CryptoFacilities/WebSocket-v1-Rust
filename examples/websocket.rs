@@ -31,7 +31,7 @@ use env_logger;
 use log::info;
 
 
-const API_PATH: &str = "wss://www.cryptofacilities.com/ws/v1";
+const API_PATH: &str = "wss://uat.cryptofacilities.com/ws/v1";
 const API_PUBLIC_KEY: Option<&str>  = None;
 const API_PRIVATE_KEY: Option<&str> = None;
 
@@ -46,7 +46,7 @@ fn subscribe_api_tester(ws: &mut WebSocket) {
     ws.subscribe_private("account_log");
     ws.subscribe_private("deposits_withdrawals");
     ws.subscribe_private("fills");
-    ws.subscribe_private("oprn_positions");
+    ws.subscribe_private("open_positions");
     ws.subscribe_private("open_orders");
     ws.subscribe_private("notifications_auth");
 }
@@ -62,7 +62,7 @@ fn unsubscribe_api_tester(ws: &mut WebSocket) {
     ws.unsubscribe_private("account_log");
     ws.unsubscribe_private("deposits_withdrawals");
     ws.unsubscribe_private("fills");
-    ws.unsubscribe_private("oprn_positions");
+    ws.unsubscribe_private("open_positions");
     ws.unsubscribe_private("open_orders");
     ws.unsubscribe_private("notifications_auth");
 }
@@ -74,9 +74,8 @@ fn input() {
 
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-
     let mut ws = WebSocket::new(API_PATH, API_PUBLIC_KEY, API_PRIVATE_KEY);
-
+    
     println!("-----------------------------------------------------------------");
     println!("*******PRESS ANY KEY TO SUBSCRIBE AND START RECEIVING INFO*******");
     println!("*****PRESS ANY KEY AGAIN TO UNSUBSCRIBE AND EXIT APPLICATION*****");
