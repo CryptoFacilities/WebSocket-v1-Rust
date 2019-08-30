@@ -25,6 +25,7 @@ use std::{
         mpsc::{self, Receiver, SyncSender},
     },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use base64;
@@ -42,7 +43,7 @@ use openssl::{
     sign::Signer,
 };
 use serde::{Serialize, Deserialize};
-use tokio;
+use tokio::{self, prelude::StreamExt};
 use websocket::{
     client::{
         builder::ClientBuilder,
@@ -93,16 +94,12 @@ pub struct Trade {
     pub price: f64,
 }
 
-fn trade_feed() -> String { "trade".to_owned() }
-
 #[derive(Deserialize, Debug)]
 pub struct TradeSnapshot {
     #[serde(flatten)]
     pub header: Header, 
     pub trades: Vec<Trade>,
 }
-
-fn trade_snapshot_feed() -> String { "trade_snapshot".to_owned() }
 
 #[derive(Deserialize, Debug)]
 pub struct BookValue {
@@ -118,8 +115,6 @@ pub struct BookValue {
     pub qty: f64,
 }
 
-fn book_feed() -> String { "book".to_owned() }
-
 #[derive(Deserialize, Debug)]
 pub struct BookSnapshot {
     pub feed: String,
@@ -129,9 +124,6 @@ pub struct BookSnapshot {
     pub bids: Vec<BookValue>,
     pub asks: Vec<BookValue>,
 }
-
-fn book_snapshot_feed() -> String { "book_snapshot".to_owned() }
-
 
 #[derive(Deserialize, Debug)]
 pub struct TickerLite {
@@ -149,12 +141,10 @@ pub struct TickerLite {
     pub maturity_time: u64
 }
 
-fn ticker_lite_feed() -> String { "ticker_lite".to_owned() }
-
 #[derive(Deserialize, Debug)]
 pub struct Ticker {
     #[serde(flatten)]
-    pub header: Header,
+    pub ticker_lite: TickerLite,
     pub bid_size: f64,
     pub ask_size: f64,
     pub leverage: String,
@@ -165,19 +155,15 @@ pub struct Ticker {
     pub open_interest: f64,
     #[serde(rename="markPrice")]
     pub mark_price: f64,
-    #[serde(rename="maturityTime")]
-    pub maturity_time: f64,
     #[serde(rename="fundingRate")]
-    pub funding_rate: f64,
-    #[serde(rename="relativeFundingRatePrediction")]
-    pub relative_funding_rate_prediction: f64,
-    #[serde(rename="fundingRatePrediction")]
-    pub funding_rate_prediction: f64,
-    #[serde(rename="nextFundingRateTime")]
-    pub next_funding_rate_time: f64,
+    pub funding_rate: Option<f64>,
+    #[serde(rename="relativeFundingRatePrediction", default)]
+    pub relative_funding_rate_prediction: Option<f64>,
+    #[serde(rename="fundingRatePrediction", default)]
+    pub funding_rate_prediction: Option<f64>,
+    #[serde(rename="nextFundingRateTime", default)]
+    pub next_funding_rate_time: Option<f64>,
 }
-
-fn ticker_feed() -> String { "ticker".to_owned() }
 
 #[derive(Deserialize, Debug)]
 pub struct Heartbeat {
@@ -186,11 +172,8 @@ pub struct Heartbeat {
     pub time: u64,
 }
 
-fn challenge_feed() -> String { "challenge".to_owned() }
-
 #[derive(Deserialize, Debug)]
 pub struct Challenge {
-    #[serde(default="challenge_feed")]
     pub feed: String,
     pub event: String,
     pub message: String,
@@ -580,29 +563,35 @@ impl WebSocket {
 
         // Establish connection to websocket server 
         let client = ClientBuilder::new(&*self.ws_url).unwrap()
-            .async_connect_secure(None)
+            .async_connect_insecure()
             .and_then(move |(duplex, _)| {
                 let (sink, stream) = duplex.split();
-                stream.filter_map(move |message| {
+                stream
+                    .timeout(Duration::from_secs(20)).map_err(|_| WebSocketError::NoDataAvailable )
+                    .filter_map(move |message| {
                     match message {
                         OwnedMessage::Text(data) => { 
-                            serde_json::from_str::<Msg>(&*data).map(|m| {
-                                sender.send(m)
-                            })
+                            let _ = serde_json::from_str::<Msg>(&*data).map(|m| {
+                                let _ = sender.send(m);
+                            });
                             None
                         },
                         OwnedMessage::Ping(data) => Some(OwnedMessage::Pong(data)),
-                        OwnedMessage::Close(e) => Some(OwnedMessage::Close(e)),
+                        OwnedMessage::Close(e) => {
+                            Some(OwnedMessage::Close(e))
+                        },
                         _ => None,
                     }
                 })
                 .select(sub_receiver.map_err(|_| WebSocketError::NoDataAvailable))
                 .take_while(|x| future::ok(!x.is_close()))
                 .forward(sink)
-            });
+            }).map_err(|_| ())
+            .map(|_| ());
         
         self.listener = Some(thread::spawn(move || {
-            let _ = runtime.block_on(client);
+            let _ = runtime.spawn(client);
+            let _ = runtime.shutdown_on_idle().wait();
         }));
 
     }
