@@ -31,7 +31,7 @@ use env_logger;
 use log::info;
 
 
-const API_PATH: &str = "wss://uat.cryptofacilities.com/ws/v1";
+const API_PATH: &str = "wss://www.cryptofacilities.com/ws/v1";
 const API_PUBLIC_KEY: Option<&str>  = None;
 const API_PRIVATE_KEY: Option<&str> = None;
 
