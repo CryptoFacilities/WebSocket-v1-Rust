@@ -563,7 +563,7 @@ impl WebSocket {
 
         // Establish connection to websocket server 
         let client = ClientBuilder::new(&*self.ws_url).unwrap()
-            .async_connect_insecure()
+            .async_connect(None)
             .and_then(move |(duplex, _)| {
                 let (sink, stream) = duplex.split();
                 stream

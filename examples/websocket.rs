@@ -95,7 +95,7 @@ fn main() {
     });
 
     input();
-    sender.send(());
+    let _ = sender.send(());
     let mut ws = t.join().unwrap();
     unsubscribe_api_tester(&mut ws);
 
