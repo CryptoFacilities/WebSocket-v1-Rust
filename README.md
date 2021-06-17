@@ -7,7 +7,7 @@ This is a Rust web socket application for [Crypto Facilities Ltd](https://www.cr
 Getting Started
 ---------------
 
-1. Amend `examples/websocket.rs` file to enter your api keys.
+1. Amend either `examples/websocket.rs` (for quotes) or `examples/ws_charts.rs` (for candlesticks) to enter your api keys.
 2. Run the example application with ```$ cargo run --example websocket```
 
 Functionality Overview

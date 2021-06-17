@@ -19,11 +19,8 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
 use std::{
-    sync::{
-        mpsc::{self, Receiver, SyncSender},
-    },
+    sync::mpsc::{self, Receiver, SyncSender},
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -36,21 +33,10 @@ use futures::{
     sync::mpsc as async_mpsc,
 };
 use log::info;
-use openssl::{
-    sha,
-    hash::MessageDigest,
-    pkey::PKey,
-    sign::Signer,
-};
-use serde::{Serialize, Deserialize};
+use openssl::{hash::MessageDigest, pkey::PKey, sha, sign::Signer};
+use serde::{Deserialize, Serialize};
 use tokio::{self, prelude::StreamExt};
-use websocket::{
-    client::{
-        builder::ClientBuilder,
-    },
-    message::OwnedMessage,
-    result::WebSocketError,
-};
+use websocket::{client::builder::ClientBuilder, message::OwnedMessage, result::WebSocketError};
 
 #[derive(Serialize, Debug)]
 struct SubscribeMsg<'a> {
@@ -74,7 +60,6 @@ struct ChallengeMsg<'a> {
 
 #[derive(Deserialize, Debug)]
 pub struct Header {
-    pub feed: String,
     #[serde(default)]
     pub product_ids: Option<Vec<String>>,
 }
@@ -82,11 +67,11 @@ pub struct Header {
 #[derive(Deserialize, Debug)]
 pub struct Trade {
     #[serde(flatten)]
-    pub header: Header, 
+    pub header: Header,
     #[serde(default)]
     pub product_id: Option<String>,
     pub side: String,
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub ty: String,
     pub seq: u64,
     pub time: u64,
@@ -97,14 +82,12 @@ pub struct Trade {
 #[derive(Deserialize, Debug)]
 pub struct TradeSnapshot {
     #[serde(flatten)]
-    pub header: Header, 
+    pub header: Header,
     pub trades: Vec<Trade>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct BookValue {
-    #[serde(default)]
-    pub feed: Option<String>,
     #[serde(default)]
     pub product_id: Option<String>,
     #[serde(default)]
@@ -117,7 +100,6 @@ pub struct BookValue {
 
 #[derive(Deserialize, Debug)]
 pub struct BookSnapshot {
-    pub feed: String,
     pub product_id: String,
     pub seq: u64,
     pub timestamp: u64,
@@ -127,7 +109,6 @@ pub struct BookSnapshot {
 
 #[derive(Deserialize, Debug)]
 pub struct TickerLite {
-    pub feed: String,
     pub product_id: String,
     pub bid: f64,
     pub ask: f64,
@@ -137,8 +118,8 @@ pub struct TickerLite {
     pub tag: String,
     pub pair: String,
     pub dtm: i64,
-    #[serde(rename="maturityTime")]
-    pub maturity_time: u64
+    #[serde(rename = "maturityTime")]
+    pub maturity_time: u64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -151,17 +132,17 @@ pub struct Ticker {
     pub index: f64,
     pub last: f64,
     pub time: f64,
-    #[serde(rename="openInterest")]
+    #[serde(rename = "openInterest")]
     pub open_interest: f64,
-    #[serde(rename="markPrice")]
+    #[serde(rename = "markPrice")]
     pub mark_price: f64,
-    #[serde(rename="fundingRate")]
+    #[serde(rename = "fundingRate")]
     pub funding_rate: Option<f64>,
-    #[serde(rename="relativeFundingRatePrediction", default)]
+    #[serde(rename = "relativeFundingRatePrediction", default)]
     pub relative_funding_rate_prediction: Option<f64>,
-    #[serde(rename="fundingRatePrediction", default)]
+    #[serde(rename = "fundingRatePrediction", default)]
     pub funding_rate_prediction: Option<f64>,
-    #[serde(rename="nextFundingRateTime", default)]
+    #[serde(rename = "nextFundingRateTime", default)]
     pub next_funding_rate_time: Option<f64>,
 }
 
@@ -174,30 +155,26 @@ pub struct Heartbeat {
 
 #[derive(Deserialize, Debug)]
 pub struct Challenge {
-    pub feed: String,
     pub event: String,
     pub message: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Subscribed {
-    pub event: String, 
+    pub feed: String,
     #[serde(flatten)]
-    pub header: Header, 
+    pub header: Header,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Error {
-    pub event: String,
     pub message: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Version {
-    pub event: String,
     pub version: u64,
 }
-
 
 //// Private ////
 
@@ -214,10 +191,9 @@ pub struct MarginAccount {
 
 #[derive(Deserialize, Debug)]
 pub struct AccountBalancesAndMargins {
-    feed: String,
     account: String,
     seq: u64,
-    margin_accounts: Vec<MarginAccount>
+    margin_accounts: Vec<MarginAccount>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -238,15 +214,13 @@ pub struct Log {
     execution: String,
     collateral: String,
     funding_rate: f64,
-    realised_funding: f64
+    realised_funding: f64,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct AccountLog {
-    feed: String,
-    logs: Vec<Log>
+    logs: Vec<Log>,
 }
-
 
 #[derive(Deserialize, Debug)]
 pub struct DepositWithdrawal {
@@ -262,8 +236,7 @@ pub struct DepositWithdrawal {
 
 #[derive(Deserialize, Debug)]
 pub struct DepositsWithdrawals {
-    feed: String,
-    elements: Vec<DepositWithdrawal>
+    elements: Vec<DepositWithdrawal>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -281,11 +254,9 @@ pub struct Fill {
 
 #[derive(Deserialize, Debug)]
 pub struct Fills {
-    feed: String,
     account: String,
-    fills: Vec<Fill>
+    fills: Vec<Fill>,
 }
-
 
 #[derive(Deserialize, Debug)]
 pub struct Position {
@@ -302,11 +273,9 @@ pub struct Position {
 
 #[derive(Deserialize, Debug)]
 pub struct OpenPositions {
-    feed: String,
     account: String,
     positions: Vec<Position>,
 }
-
 
 #[derive(Deserialize, Debug)]
 pub struct Order {
@@ -316,7 +285,7 @@ pub struct Order {
     filled: f64,
     limit_price: f64,
     stop_price: f64,
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     ty: String,
     order_id: String,
     #[serde(default)]
@@ -326,14 +295,12 @@ pub struct Order {
 
 #[derive(Deserialize, Debug)]
 pub struct OpenOrdersSnapshot {
-    feed: String,
     account: String,
     orders: Vec<Order>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct OpenOrders {
-    feed: String,
     is_cancel: bool,
     reason: String,
     #[serde(default)]
@@ -356,16 +323,28 @@ pub struct Notification {
 
 #[derive(Deserialize, Debug)]
 pub struct Notifications {
-    feed: String,
     notifications: Vec<Notification>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
-pub enum Msg {
+pub enum WebSocketMsg {
+    EventMsg(EventMsg),
+    FeedMsg(FeedMsg),
+    CandleMsg(CandleMsg),
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum EventMsg {
     Version(Version),
-    Subscribed(Subscribed),
     Error(Error),
+    Subscribed(Subscribed),
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "feed", rename_all = "snake_case")]
+pub enum FeedMsg {
     Trade(Trade),
     TradeSnapshot(TradeSnapshot),
     Book(BookValue),
@@ -384,6 +363,18 @@ pub enum Msg {
     Notifications(Notifications),
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(tag = "candle", rename_all = "snake_case")]
+pub struct CandleMsg {
+    pub(crate) product_id: String,
+    pub(crate) candle: Candle,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Candle {
+    pub(crate) close: String,
+}
 
 pub struct WebSocket {
     keys: Option<(String, String)>,
@@ -391,7 +382,7 @@ pub struct WebSocket {
     challenge: Option<String>,
     signed_challenge: Option<String>,
     sub_sender: Wait<async_mpsc::Sender<OwnedMessage>>,
-    receiver: Receiver<Msg>,
+    receiver: Receiver<WebSocketMsg>,
     listener: Option<JoinHandle<()>>,
 }
 
@@ -399,11 +390,11 @@ impl WebSocket {
     pub fn new(ws_url: &str, public_key: Option<&str>, private_key: Option<&str>) -> WebSocket {
         let (sender, receiver) = mpsc::sync_channel(1);
         let (sub_sender, sub_receiver) = async_mpsc::channel(0);
-        
+
         let sub_sender_sync = sub_sender.wait();
-        
+
         let mut ws = WebSocket {
-            keys: public_key.and_then(|pb| private_key.map(|pv| (pb.to_owned(), pv.to_owned()) )),
+            keys: public_key.and_then(|pb| private_key.map(|pv| (pb.to_owned(), pv.to_owned()))),
             ws_url: ws_url.to_owned(),
             challenge: None,
             signed_challenge: None,
@@ -417,13 +408,13 @@ impl WebSocket {
         ws
     }
 
-    pub fn feed(&mut self) -> mpsc::Iter<Msg> {
+    pub fn feed(&mut self) -> mpsc::Iter<WebSocketMsg> {
         self.receiver.iter()
     }
 
     //// public feeds ////
 
-    pub fn subscribe(&mut self, feed: &str, products: Option<&[&str]>) { 
+    pub fn subscribe(&mut self, feed: &str, products: Option<&[&str]>) {
         let msg = serde_json::to_string(&SubscribeMsg {
             event: "subscribe",
             feed: feed,
@@ -431,14 +422,15 @@ impl WebSocket {
             api_key: None,
             original_challenge: None,
             signed_challenge: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         info!("subscribe to public feed: {}", feed);
-        
+
         let _ = self.sub_sender.send(OwnedMessage::Text(msg));
     }
 
-    pub fn unsubscribe(&mut self, feed: &str, products: Option<&[&str]>) { 
+    pub fn unsubscribe(&mut self, feed: &str, products: Option<&[&str]>) {
         let msg = serde_json::to_string(&SubscribeMsg {
             event: "unsubscribe",
             feed: feed,
@@ -446,7 +438,8 @@ impl WebSocket {
             api_key: None,
             original_challenge: None,
             signed_challenge: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         info!("unsubscribe from public feed: {}", feed);
 
@@ -467,7 +460,8 @@ impl WebSocket {
             api_key: self.keys.as_ref().map(|(pb, _)| &**pb),
             original_challenge: self.challenge.as_ref().map(|v| &**v),
             signed_challenge: self.signed_challenge.as_ref().map(|v| &**v),
-        }).unwrap();
+        })
+        .unwrap();
 
         info!("subscribe to private feed: {}", feed);
 
@@ -487,7 +481,8 @@ impl WebSocket {
             api_key: self.keys.as_ref().map(|(pb, _)| &**pb),
             original_challenge: self.challenge.as_ref().map(|v| &**v),
             signed_challenge: self.signed_challenge.as_ref().map(|v| &**v),
-        }).unwrap();
+        })
+        .unwrap();
 
         info!("unsubscribe from private feed: {}", feed);
 
@@ -495,18 +490,18 @@ impl WebSocket {
         None
     }
 
-    // sign challenge request  
+    // sign challenge request
     fn sign_challenge(&mut self) -> Option<()> {
-        match (self.keys.as_ref(), self.challenge.as_ref()) { 
+        match (self.keys.as_ref(), self.challenge.as_ref()) {
             (Some(_), Some(_)) => Some(()),
-            (Some((ref pb, ref pv)), None) => { 
+            (Some((ref pb, ref pv)), None) => {
                 Self::request_challenge(&mut self.sub_sender, &*pb);
                 let c = self.wait_for_challenge();
                 self.signed_challenge = Some(Self::sign(&*pv, &*c));
                 self.challenge = Some(c);
                 Some(())
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 
@@ -518,7 +513,7 @@ impl WebSocket {
 
         for msg in self.receiver.iter() {
             match msg {
-                Msg::Challenge(c) => {
+                WebSocketMsg::FeedMsg(FeedMsg::Challenge(c)) => {
                     challenge = c.message;
                     break;
                 }
@@ -532,12 +527,13 @@ impl WebSocket {
         let msg = serde_json::to_string(&ChallengeMsg {
             event: "challenge",
             api_key: public_key,
-        }).unwrap();
+        })
+        .unwrap();
 
         let _ = sender.send(OwnedMessage::Text(msg));
     }
 
-	fn hmac(secret: &[u8], data: &[u8]) -> Vec<u8> {
+    fn hmac(secret: &[u8], data: &[u8]) -> Vec<u8> {
         let key = PKey::hmac(secret).unwrap();
         let mut signer = Signer::new(MessageDigest::sha512(), &key).unwrap();
         signer.update(data).unwrap();
@@ -553,49 +549,50 @@ impl WebSocket {
         base64::encode(&*digest)
     }
 
-    // async listener 
-    fn listen(&mut self, sender: SyncSender<Msg>, sub_receiver: async_mpsc::Receiver<OwnedMessage>) {
+    // async listener
+    fn listen(
+        &mut self,
+        sender: SyncSender<WebSocketMsg>,
+        sub_receiver: async_mpsc::Receiver<OwnedMessage>,
+    ) {
         let mut runtime = tokio::runtime::Builder::new()
             .blocking_threads(1)
             .core_threads(1)
             .build()
             .unwrap();
 
-        // Establish connection to websocket server 
-        let client = ClientBuilder::new(&*self.ws_url).unwrap()
+        // Establish connection to websocket server
+        let client = ClientBuilder::new(&*self.ws_url)
+            .unwrap()
             .async_connect(None)
             .and_then(move |(duplex, _)| {
                 let (sink, stream) = duplex.split();
                 stream
-                    .timeout(Duration::from_secs(20)).map_err(|_| WebSocketError::NoDataAvailable )
-                    .filter_map(move |message| {
-                    match message {
-                        OwnedMessage::Text(data) => { 
-                            let _ = serde_json::from_str::<Msg>(&*data).map(|m| {
+                    .timeout(Duration::from_secs(20))
+                    .map_err(|_| WebSocketError::NoDataAvailable)
+                    .filter_map(move |message| match message {
+                        OwnedMessage::Text(data) => {
+                            let _ = serde_json::from_str::<WebSocketMsg>(&*data).map(|m| {
                                 let _ = sender.send(m);
                             });
                             None
-                        },
+                        }
                         OwnedMessage::Ping(data) => Some(OwnedMessage::Pong(data)),
-                        OwnedMessage::Close(e) => {
-                            Some(OwnedMessage::Close(e))
-                        },
+                        OwnedMessage::Close(e) => Some(OwnedMessage::Close(e)),
                         _ => None,
-                    }
-                })
-                .select(sub_receiver.map_err(|_| WebSocketError::NoDataAvailable))
-                .take_while(|x| future::ok(!x.is_close()))
-                .forward(sink)
-            }).map_err(|_| ())
+                    })
+                    .select(sub_receiver.map_err(|_| WebSocketError::NoDataAvailable))
+                    .take_while(|x| future::ok(!x.is_close()))
+                    .forward(sink)
+            })
+            .map_err(|_| ())
             .map(|_| ());
-        
+
         self.listener = Some(thread::spawn(move || {
             let _ = runtime.spawn(client);
             let _ = runtime.shutdown_on_idle().wait();
         }));
-
     }
-
 }
 
 impl Drop for WebSocket {
@@ -606,4 +603,3 @@ impl Drop for WebSocket {
         }
     }
 }
-

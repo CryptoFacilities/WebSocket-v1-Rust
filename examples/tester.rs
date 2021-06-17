@@ -1,4 +1,3 @@
-
 // Crypto Facilities Ltd Web Socket API V1
 
 // Copyright (c) 2019 Crypto Facilities
@@ -20,12 +19,11 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
 use std::{
     env,
     io::{self, Read},
     sync::mpsc,
-    thread
+    thread,
 };
 
 use cf_ws_v1::WebSocket;
@@ -40,4 +38,4 @@ fn main() {
     ws.subscribe("ticker", Some(&["PI_XBTUSD"]));
 
     for _ in ws.feed() {}
-} 
+}

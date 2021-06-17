@@ -34,35 +34,15 @@ const API_PUBLIC_KEY: Option<&str> = None;
 const API_PRIVATE_KEY: Option<&str> = None;
 
 fn subscribe_api_tester(ws: &mut WebSocket) {
-    ws.subscribe("trade", Some(&["PI_XBTUSD"]));
-    ws.subscribe("book", Some(&["PI_XBTUSD"]));
-    ws.subscribe("ticker", Some(&["PI_XBTUSD"]));
-    ws.subscribe("ticker_lite", Some(&["PI_XBTUSD"]));
+    ws.subscribe("candles_trade_1m", Some(&["PI_XBTUSD"]));
+    ws.subscribe("candles_mark_1m", Some(&["PI_XBTUSD"]));
     ws.subscribe("heartbeat", None);
-
-    ws.subscribe_private("account_balances_and_margins");
-    ws.subscribe_private("account_log");
-    ws.subscribe_private("deposits_withdrawals");
-    ws.subscribe_private("fills");
-    ws.subscribe_private("open_positions");
-    ws.subscribe_private("open_orders");
-    ws.subscribe_private("notifications_auth");
 }
 
 fn unsubscribe_api_tester(ws: &mut WebSocket) {
-    ws.unsubscribe("trade", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("book", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("ticker", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("ticker_lite", Some(&["PI_XBTUSD"]));
+    ws.unsubscribe("candles_trade_1m", Some(&["PI_XBTUSD"]));
+    ws.unsubscribe("candles_mark_1m", Some(&["PI_XBTUSD"]));
     ws.unsubscribe("heartbeat", None);
-
-    ws.unsubscribe_private("account_balances_and_margins");
-    ws.unsubscribe_private("account_log");
-    ws.unsubscribe_private("deposits_withdrawals");
-    ws.unsubscribe_private("fills");
-    ws.unsubscribe_private("open_positions");
-    ws.unsubscribe_private("open_orders");
-    ws.unsubscribe_private("notifications_auth");
 }
 
 fn input() {
