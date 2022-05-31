@@ -1,6 +1,6 @@
 // Crypto Facilities Ltd Web Socket API V1
 
-// Copyright (c) 2019 Crypto Facilities
+// Copyright (c) 2022 Crypto Facilities
 
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the "Software"),
@@ -19,20 +19,17 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
 use std::{
     io::{self, Read},
     sync::mpsc,
-    thread
+    thread,
 };
 
 use cf_ws_v1::WebSocket;
-use env_logger;
 use log::info;
 
-
 const API_PATH: &str = "wss://www.cryptofacilities.com/ws/v1";
-const API_PUBLIC_KEY: Option<&str>  = None;
+const API_PUBLIC_KEY: Option<&str> = None;
 const API_PRIVATE_KEY: Option<&str> = None;
 
 fn subscribe_api_tester(ws: &mut WebSocket) {
@@ -73,9 +70,10 @@ fn input() {
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     let mut ws = WebSocket::new(API_PATH, API_PUBLIC_KEY, API_PRIVATE_KEY);
-    
+
     println!("-----------------------------------------------------------------");
     println!("*******PRESS ANY KEY TO SUBSCRIBE AND START RECEIVING INFO*******");
     println!("*****PRESS ANY KEY AGAIN TO UNSUBSCRIBE AND EXIT APPLICATION*****");
@@ -83,12 +81,14 @@ fn main() {
 
     input();
     subscribe_api_tester(&mut ws);
-    
+
     let (sender, receiver) = mpsc::channel();
 
     let t = thread::spawn(move || {
         for msg in ws.feed() {
-            if receiver.try_recv().is_ok() { break; }
+            if receiver.try_recv().is_ok() {
+                break;
+            }
             info!("{:?}", msg);
         }
         ws
@@ -102,5 +102,4 @@ fn main() {
     println!("-----------------------------------------------------------------");
     println!("**********************EXITING APPLICATION************************");
     println!("-----------------------------------------------------------------");
-    
-} 
+}
