@@ -1,23 +1,17 @@
-Crypto Facilities Websocket API v1
-==================================
+# Crypto Facilities Websocket API v1
 
 This is a Rust web socket application for [Crypto Facilities Ltd](https://www.cryptofacilities.com/)
 
+## Getting Started
 
-Getting Started
----------------
+1. Amend `examples/websocket.rs` file to enter your API keys.
+2. Run the example application with `$ cargo run --example websocket`
 
-1. Amend `examples/websocket.rs` file to enter your api keys.
-2. Run the example application with ```$ cargo run --example websocket```
+## Functionality Overview
 
-Functionality Overview
-----------------------
+- This application subscribes to all available feeds
 
-* This application subscribes to all available feeds
-
-
-Application Sample Output
--------------------------
+## Application Sample Output
 
 The following is some of what you can expect when running this application:
 
