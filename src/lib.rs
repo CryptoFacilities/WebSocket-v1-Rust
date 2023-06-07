@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use base64::prelude::*;
 use futures::{
     future::{self, Future},
     sink::{Sink, Wait},
@@ -187,9 +188,9 @@ impl WebSocket {
         let mut hasher = sha::Sha256::new();
         hasher.update(challenge.as_bytes());
         let hash = hasher.finish();
-        let secret_decoded = base64::decode(private_key.as_bytes()).unwrap();
+        let secret_decoded = BASE64_STANDARD.decode(private_key).unwrap();
         let digest = Self::hmac(&secret_decoded, &hash);
-        base64::encode(&*digest)
+        BASE64_STANDARD.encode(&*digest)
     }
 
     // async listener

@@ -5,7 +5,7 @@ authors = ["Crypto Facilities"]
 edition = "2021"
 
 [dependencies]
-base64 = "0.13"
+base64 = "0.21"
 futures = "0.1"
 log = "0.4"
 native-tls = "0.2"
@@ -16,4 +16,4 @@ tokio = "0.1"
 websocket = "0.23"
 
 [dev-dependencies]
-env_logger = "0.9"
+env_logger = "0.10"
