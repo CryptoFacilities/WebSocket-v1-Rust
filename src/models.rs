@@ -148,158 +148,158 @@ pub struct Version {
 
 #[derive(Debug, Deserialize)]
 pub struct MarginAccount {
-    pub(crate) name: String,
-    pub(crate) balance: f64,
-    pub(crate) pnl: f64,
-    pub(crate) pv: f64,
-    pub(crate) am: f64,
-    pub(crate) im: f64,
-    pub(crate) mm: f64,
+    pub name: String,
+    pub balance: f64,
+    pub pnl: f64,
+    pub pv: f64,
+    pub am: f64,
+    pub im: f64,
+    pub mm: f64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AccountBalancesAndMargins {
-    pub(crate) feed: String,
-    pub(crate) account: String,
-    pub(crate) seq: u64,
-    pub(crate) margin_accounts: Vec<MarginAccount>,
+    pub feed: String,
+    pub account: String,
+    pub seq: u64,
+    pub margin_accounts: Vec<MarginAccount>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Log {
-    pub(crate) id: u64,
-    pub(crate) date: String,
-    pub(crate) asset: String,
-    pub(crate) info: String,
-    pub(crate) booking_uid: String,
-    pub(crate) margin_account: String,
-    pub(crate) old_balance: f64,
-    pub(crate) new_balance: f64,
-    pub(crate) old_average_entry_price: f64,
-    pub(crate) new_average_entry_price: f64,
-    pub(crate) trade_price: f64,
-    pub(crate) mark_price: f64,
-    pub(crate) fee: f64,
-    pub(crate) execution: String,
-    pub(crate) collateral: String,
-    pub(crate) funding_rate: f64,
-    pub(crate) realised_funding: f64,
+    pub id: u64,
+    pub date: String,
+    pub asset: String,
+    pub info: String,
+    pub booking_uid: String,
+    pub margin_account: String,
+    pub old_balance: f64,
+    pub new_balance: f64,
+    pub old_average_entry_price: f64,
+    pub new_average_entry_price: f64,
+    pub trade_price: f64,
+    pub mark_price: f64,
+    pub fee: f64,
+    pub execution: String,
+    pub collateral: String,
+    pub funding_rate: f64,
+    pub realised_funding: f64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AccountLog {
-    pub(crate) feed: String,
-    pub(crate) logs: Vec<Log>,
+    pub feed: String,
+    pub logs: Vec<Log>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct DepositWithdrawal {
-    pub(crate) uid: String,
-    pub(crate) time: String,
-    pub(crate) amount: f64,
-    pub(crate) unit: String,
-    pub(crate) receiving_address: String,
-    pub(crate) status: String,
-    pub(crate) confirmations: u64,
-    pub(crate) tx_reference: String,
+    pub uid: String,
+    pub time: String,
+    pub amount: f64,
+    pub unit: String,
+    pub receiving_address: String,
+    pub status: String,
+    pub confirmations: u64,
+    pub tx_reference: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct DepositsWithdrawals {
-    pub(crate) feed: String,
-    pub(crate) elements: Vec<DepositWithdrawal>,
+    pub feed: String,
+    pub elements: Vec<DepositWithdrawal>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Fill {
-    pub(crate) instrument: String,
-    pub(crate) time: String,
-    pub(crate) price: f64,
-    pub(crate) seq: u64,
-    pub(crate) buy: bool,
-    pub(crate) qty: f64,
-    pub(crate) order_id: String,
-    pub(crate) fill_id: String,
-    pub(crate) fill_type: String,
+    pub instrument: String,
+    pub time: String,
+    pub price: f64,
+    pub seq: u64,
+    pub buy: bool,
+    pub qty: f64,
+    pub order_id: String,
+    pub fill_id: String,
+    pub fill_type: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Fills {
-    pub(crate) feed: String,
-    pub(crate) account: String,
-    pub(crate) fills: Vec<Fill>,
+    pub feed: String,
+    pub account: String,
+    pub fills: Vec<Fill>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Position {
-    pub(crate) instrument: String,
-    pub(crate) balance: f64,
-    pub(crate) entry_price: f64,
-    pub(crate) mark_price: f64,
-    pub(crate) index_price: f64,
-    pub(crate) pnl: f64,
-    pub(crate) liquidation_threashold: f64,
-    pub(crate) return_on_equity: f64,
-    pub(crate) effective_leverage: f64,
+    pub instrument: String,
+    pub balance: f64,
+    pub entry_price: f64,
+    pub mark_price: f64,
+    pub index_price: f64,
+    pub pnl: f64,
+    pub liquidation_threashold: f64,
+    pub return_on_equity: f64,
+    pub effective_leverage: f64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OpenPositions {
-    pub(crate) feed: String,
-    pub(crate) account: String,
-    pub(crate) positions: Vec<Position>,
+    pub feed: String,
+    pub account: String,
+    pub positions: Vec<Position>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Order {
-    pub(crate) instrument: String,
-    pub(crate) time: u64,
-    pub(crate) qty: f64,
-    pub(crate) filled: f64,
-    pub(crate) limit_price: f64,
-    pub(crate) stop_price: f64,
+    pub instrument: String,
+    pub time: u64,
+    pub qty: f64,
+    pub filled: f64,
+    pub limit_price: f64,
+    pub stop_price: f64,
     #[serde(rename = "type")]
-    pub(crate) ty: String,
-    pub(crate) order_id: String,
+    pub ty: String,
+    pub order_id: String,
     #[serde(default)]
-    pub(crate) cli_order_id: Option<String>,
-    pub(crate) direction: i64,
+    pub cli_order_id: Option<String>,
+    pub direction: i64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OpenOrdersSnapshot {
-    pub(crate) feed: String,
-    pub(crate) account: String,
-    pub(crate) orders: Vec<Order>,
+    pub feed: String,
+    pub account: String,
+    pub orders: Vec<Order>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OpenOrders {
-    pub(crate) feed: String,
-    pub(crate) is_cancel: bool,
-    pub(crate) reason: String,
+    pub feed: String,
+    pub is_cancel: bool,
+    pub reason: String,
     #[serde(default)]
-    pub(crate) order_id: Option<String>,
+    pub order_id: Option<String>,
     #[serde(default)]
-    pub(crate) cli_ord_id: Option<String>,
+    pub cli_ord_id: Option<String>,
     #[serde(default)]
-    pub(crate) order: Option<Order>,
+    pub order: Option<Order>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Notification {
-    pub(crate) id: u64,
+    pub id: u64,
     #[serde(rename = "type")]
-    pub(crate) ty: String,
-    pub(crate) priority: String,
-    pub(crate) note: String,
-    pub(crate) effective_time: u64,
+    pub ty: String,
+    pub priority: String,
+    pub note: String,
+    pub effective_time: u64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Notifications {
-    pub(crate) feed: String,
-    pub(crate) notifications: Vec<Notification>,
+    pub feed: String,
+    pub notifications: Vec<Notification>,
 }
 
 #[derive(Debug, Deserialize)]

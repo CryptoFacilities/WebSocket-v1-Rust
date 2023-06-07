@@ -1,4 +1,6 @@
-// Crypto Facilities Ltd Web Socket API V1
+//! Crypto Facilities Ltd WebSocket API v1
+
+#![deny(rust_2018_idioms, nonstandard_style, future_incompatible)]
 
 use std::{
     sync::mpsc::{self, Receiver, SyncSender},
@@ -52,7 +54,7 @@ impl WebSocket {
         ws
     }
 
-    pub fn feed(&mut self) -> mpsc::Iter<models::Msg> {
+    pub fn feed(&mut self) -> mpsc::Iter<'_, models::Msg> {
         self.receiver.iter()
     }
 
