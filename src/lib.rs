@@ -15,13 +15,16 @@ use futures::{
     stream::Stream,
     sync::mpsc as async_mpsc,
 };
+use hmac::{Hmac, Mac as _};
 use log::info;
-use openssl::{hash::MessageDigest, pkey::PKey, sha, sign::Signer};
+use sha2::{Digest as _, Sha256, Sha512};
 use tokio::{self, prelude::StreamExt};
 use websocket::{client::builder::ClientBuilder, message::OwnedMessage, result::WebSocketError};
 
 mod models;
 pub use models::*;
+
+type HmacSha512 = Hmac<Sha512>;
 
 pub struct WebSocket {
     keys: Option<(String, String)>,
@@ -178,22 +181,20 @@ impl WebSocket {
     }
 
     fn hmac(secret: &[u8], data: &[u8]) -> Vec<u8> {
-        let key = PKey::hmac(secret).unwrap();
-        let mut signer = Signer::new(MessageDigest::sha512(), &key).unwrap();
-        signer.update(data).unwrap();
-        signer.sign_to_vec().unwrap()
+        let mut signer = HmacSha512::new_from_slice(secret).unwrap();
+        signer.update(data);
+        signer.finalize().into_bytes().to_vec()
     }
 
     fn sign(private_key: &str, challenge: &str) -> String {
-        let mut hasher = sha::Sha256::new();
+        let mut hasher = Sha256::new();
         hasher.update(challenge.as_bytes());
-        let hash = hasher.finish();
+        let hash = hasher.finalize();
         let secret_decoded = BASE64_STANDARD.decode(private_key).unwrap();
         let digest = Self::hmac(&secret_decoded, &hash);
         BASE64_STANDARD.encode(&*digest)
     }
 
-    // async listener
     fn listen(
         &mut self,
         sender: SyncSender<models::Msg>,
