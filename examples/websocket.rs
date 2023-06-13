@@ -1,46 +1,46 @@
 use std::{
     io::{self, Read},
-    sync::mpsc,
     thread,
 };
 
 use cf_ws_v1::WebSocket;
 use log::info;
+use tokio::sync::oneshot;
 
 const API_PATH: &str = "wss://www.cryptofacilities.com/ws/v1";
 const API_PUBLIC_KEY: Option<&str> = None;
 const API_PRIVATE_KEY: Option<&str> = None;
 
-fn subscribe_api_tester(ws: &mut WebSocket) {
-    ws.subscribe("trade", Some(&["PI_XBTUSD"]));
-    ws.subscribe("book", Some(&["PI_XBTUSD"]));
-    ws.subscribe("ticker", Some(&["PI_XBTUSD"]));
-    ws.subscribe("ticker_lite", Some(&["PI_XBTUSD"]));
-    ws.subscribe("heartbeat", None);
+async fn subscribe_api_tester(ws: &mut WebSocket) {
+    ws.subscribe("trade", Some(&["PI_XBTUSD"])).await;
+    ws.subscribe("book", Some(&["PI_XBTUSD"])).await;
+    ws.subscribe("ticker", Some(&["PI_XBTUSD"])).await;
+    ws.subscribe("ticker_lite", Some(&["PI_XBTUSD"])).await;
+    ws.subscribe("heartbeat", None).await;
 
-    ws.subscribe_private("account_balances_and_margins");
-    ws.subscribe_private("account_log");
-    ws.subscribe_private("deposits_withdrawals");
-    ws.subscribe_private("fills");
-    ws.subscribe_private("open_positions");
-    ws.subscribe_private("open_orders");
-    ws.subscribe_private("notifications_auth");
+    ws.subscribe_private("account_balances_and_margins").await;
+    ws.subscribe_private("account_log").await;
+    ws.subscribe_private("deposits_withdrawals").await;
+    ws.subscribe_private("fills").await;
+    ws.subscribe_private("open_positions").await;
+    ws.subscribe_private("open_orders").await;
+    ws.subscribe_private("notifications_auth").await;
 }
 
-fn unsubscribe_api_tester(ws: &mut WebSocket) {
-    ws.unsubscribe("trade", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("book", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("ticker", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("ticker_lite", Some(&["PI_XBTUSD"]));
-    ws.unsubscribe("heartbeat", None);
+async fn unsubscribe_api_tester(ws: &mut WebSocket) {
+    ws.unsubscribe("trade", Some(&["PI_XBTUSD"])).await;
+    ws.unsubscribe("book", Some(&["PI_XBTUSD"])).await;
+    ws.unsubscribe("ticker", Some(&["PI_XBTUSD"])).await;
+    ws.unsubscribe("ticker_lite", Some(&["PI_XBTUSD"])).await;
+    ws.unsubscribe("heartbeat", None).await;
 
-    ws.unsubscribe_private("account_balances_and_margins");
-    ws.unsubscribe_private("account_log");
-    ws.unsubscribe_private("deposits_withdrawals");
-    ws.unsubscribe_private("fills");
-    ws.unsubscribe_private("open_positions");
-    ws.unsubscribe_private("open_orders");
-    ws.unsubscribe_private("notifications_auth");
+    ws.unsubscribe_private("account_balances_and_margins").await;
+    ws.unsubscribe_private("account_log").await;
+    ws.unsubscribe_private("deposits_withdrawals").await;
+    ws.unsubscribe_private("fills").await;
+    ws.unsubscribe_private("open_positions").await;
+    ws.unsubscribe_private("open_orders").await;
+    ws.unsubscribe_private("notifications_auth").await;
 }
 
 fn input() {
@@ -48,37 +48,51 @@ fn input() {
     let _ = io::stdin().read(&mut buffer);
 }
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let mut ws = WebSocket::new(API_PATH, API_PUBLIC_KEY, API_PRIVATE_KEY);
+    let mut ws = WebSocket::new(API_PATH, API_PUBLIC_KEY, API_PRIVATE_KEY).await;
 
-    println!("-----------------------------------------------------------------");
-    println!("*******PRESS ANY KEY TO SUBSCRIBE AND START RECEIVING INFO*******");
-    println!("*****PRESS ANY KEY AGAIN TO UNSUBSCRIBE AND EXIT APPLICATION*****");
-    println!("-----------------------------------------------------------------");
+    log::info!("-----------------------------------------------------------------");
+    log::info!("****** PRESS ANY KEY TO SUBSCRIBE AND START RECEIVING INFO ******");
+    log::info!("**** PRESS ANY KEY AGAIN TO UNSUBSCRIBE AND EXIT APPLICATION ****");
+    log::info!("-----------------------------------------------------------------");
 
     input();
-    subscribe_api_tester(&mut ws);
+    subscribe_api_tester(&mut ws).await;
 
-    let (sender, receiver) = mpsc::channel();
+    let (stop_tx, mut stop_rx) = oneshot::channel();
 
-    let t = thread::spawn(move || {
-        for msg in ws.feed() {
-            if receiver.try_recv().is_ok() {
-                break;
+    thread::spawn(move || {
+        input();
+        stop_tx.send(()).unwrap();
+    });
+
+    let t = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                Some(msg) = ws.next_msg() => {
+                    info!("{msg:?}");
+                }
+
+                _ = &mut stop_rx => {
+                    break;
+                }
+
+                else => {
+                    log::warn!("else in main ?!?");
+                }
             }
-            info!("{:?}", msg);
         }
+
         ws
     });
 
-    input();
-    let _ = sender.send(());
-    let mut ws = t.join().unwrap();
-    unsubscribe_api_tester(&mut ws);
+    let mut ws = t.await.unwrap();
+    unsubscribe_api_tester(&mut ws).await;
 
-    println!("-----------------------------------------------------------------");
-    println!("**********************EXITING APPLICATION************************");
-    println!("-----------------------------------------------------------------");
+    log::info!("-----------------------------------------------------------------");
+    log::info!("********************* EXITING APPLICATION ***********************");
+    log::info!("-----------------------------------------------------------------");
 }

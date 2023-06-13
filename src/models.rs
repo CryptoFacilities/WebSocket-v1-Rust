@@ -234,13 +234,13 @@ pub struct Fills {
 pub struct Position {
     pub instrument: String,
     pub balance: f64,
+    pub pnl: f64,
     pub entry_price: f64,
     pub mark_price: f64,
     pub index_price: f64,
-    pub pnl: f64,
-    pub liquidation_threashold: f64,
-    pub return_on_equity: f64,
+    pub liquidation_threshold: f64,
     pub effective_leverage: f64,
+    pub return_on_equity: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -315,6 +315,7 @@ pub enum Msg {
     Ticker(Ticker),
     TickerLite(TickerLite),
     Heartbeat(Heartbeat),
+    // TODO: challenge is not reachable
     Challenge(Challenge),
     AccountBalancesAndMargins(AccountBalancesAndMargins),
     AccountLog(AccountLog),

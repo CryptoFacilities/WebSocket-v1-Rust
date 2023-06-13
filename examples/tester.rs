@@ -1,16 +1,16 @@
-use std::env;
-
 use cf_ws_v1::WebSocket;
 
-fn main() {
+const API_PATH: &str = "wss://www.cryptofacilities.com/ws/v1";
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let endpoint = env::args().nth(1).expect("no websocket endpoint provided");
+    let mut ws = WebSocket::new(API_PATH, None, None).await;
 
-    let mut ws = WebSocket::new(&endpoint, None, None);
-    ws.subscribe("ticker", Some(&["PI_XBTUSD"]));
+    ws.subscribe("ticker", Some(&["PI_XBTUSD"])).await;
 
-    for msg in ws.feed() {
-        log::debug!("{msg:?}");
+    while let Some(msg) = ws.next_msg().await {
+        log::info!("{msg:?}");
     }
 }

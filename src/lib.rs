@@ -2,24 +2,13 @@
 
 #![deny(rust_2018_idioms, nonstandard_style, future_incompatible)]
 
-use std::{
-    sync::mpsc::{self, Receiver, SyncSender},
-    thread::{self, JoinHandle},
-    time::Duration,
-};
-
 use base64::prelude::*;
-use futures::{
-    future::{self, Future},
-    sink::{Sink, Wait},
-    stream::Stream,
-    sync::mpsc as async_mpsc,
-};
+use futures_util::{SinkExt as _, StreamExt as _};
 use hmac::{Hmac, Mac as _};
 use log::info;
 use sha2::{Digest as _, Sha256, Sha512};
-use tokio::{self, prelude::StreamExt};
-use websocket::{client::builder::ClientBuilder, message::OwnedMessage, result::WebSocketError};
+use tokio::{sync::mpsc, task::JoinHandle};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 mod models;
 pub use models::*;
@@ -27,44 +16,112 @@ pub use models::*;
 type HmacSha512 = Hmac<Sha512>;
 
 pub struct WebSocket {
+    tx: mpsc::Sender<Message>,
+    rx: mpsc::Receiver<models::Msg>,
     keys: Option<(String, String)>,
-    ws_url: String,
     challenge: Option<String>,
     signed_challenge: Option<String>,
-    sub_sender: Wait<async_mpsc::Sender<OwnedMessage>>,
-    receiver: Receiver<models::Msg>,
-    listener: Option<JoinHandle<()>>,
+    _handle: JoinHandle<()>,
 }
 
 impl WebSocket {
-    pub fn new(ws_url: &str, public_key: Option<&str>, private_key: Option<&str>) -> WebSocket {
-        let (sender, receiver) = mpsc::sync_channel(1);
-        let (sub_sender, sub_receiver) = async_mpsc::channel(0);
+    pub async fn new(
+        ws_url: &str,
+        public_key: Option<&str>,
+        private_key: Option<&str>,
+    ) -> WebSocket {
+        let ws_url = ws_url.to_owned();
 
-        let sub_sender_sync = sub_sender.wait();
+        let (send_tx, mut send_rx) = mpsc::channel(42);
+        let (recv_tx, recv_rx) = mpsc::channel(42);
 
-        let mut ws = WebSocket {
-            keys: public_key.and_then(|pb| private_key.map(|pv| (pb.to_owned(), pv.to_owned()))),
-            ws_url: ws_url.to_owned(),
+        let (mut ws, _res) = connect_async(&ws_url).await.unwrap();
+
+        let handle = tokio::spawn(async move {
+            loop {
+                log::trace!("waiting for message or event");
+
+                tokio::select! {
+                    msg = send_rx.recv() => {
+                        match msg {
+                            Some(msg) => {
+                                log::trace!("sending TEXT: {msg:?}");
+                                ws.send(msg).await.unwrap();
+                                ws.flush().await.unwrap();
+                            }
+
+                            None => {
+                                panic!("out tx closed ?!");
+                            }
+                        };
+                    }
+
+                    res = ws.next() => {
+                        let msg = match res {
+                            Some(Ok(msg)) => msg,
+                            Some(Err(err)) => {
+                                log::error!("{err}");
+                                continue;
+                            }
+                            None => break,
+                        };
+
+                        match msg {
+                            Message::Text(text) => {
+                                log::debug!("TEXT received: {} bytes", text.len());
+                                log::trace!("TEXT received: {text}");
+
+                                // parse and send to channel
+                                let msg = serde_json::from_str(&text).unwrap();
+                                recv_tx.send(msg).await.unwrap();
+                            }
+                            Message::Binary(_) => {
+                                unimplemented!("BINARY message received; not supported");
+                            }
+                            Message::Ping(msg) => {
+                                log::trace!("PING received; sending PONG");
+                                ws.send(Message::Pong(msg)).await.unwrap();
+                            }
+                            Message::Pong(msg) => {
+                                log::debug!("PONG received: {msg:X?}");
+                            },
+                            Message::Close(msg) => {
+                                log::debug!("CLOSE received: {msg:X?}");
+                                ws.close(msg).await.unwrap();
+                                break;
+                            },
+                            Message::Frame(_) => unreachable!("raw frames are not exposed here"),
+                        };
+                    }
+
+                    else => {
+                        panic!("else branch reached somehow ?!?");
+                    }
+                };
+            }
+
+            log::warn!("WS management task is done");
+        });
+
+        WebSocket {
+            tx: send_tx,
+            rx: recv_rx,
+            keys: public_key
+                .map(ToOwned::to_owned)
+                .zip(private_key.map(ToOwned::to_owned)),
             challenge: None,
             signed_challenge: None,
-            sub_sender: sub_sender_sync,
-            receiver,
-            listener: None,
-        };
-
-        ws.listen(sender, sub_receiver);
-
-        ws
+            _handle: handle,
+        }
     }
 
-    pub fn feed(&mut self) -> mpsc::Iter<'_, models::Msg> {
-        self.receiver.iter()
+    pub async fn next_msg(&mut self) -> Option<models::Msg> {
+        self.rx.recv().await
     }
 
     //// public feeds ////
 
-    pub fn subscribe(&mut self, feed: &str, products: Option<&[&str]>) {
+    pub async fn subscribe(&mut self, feed: &str, products: Option<&[&str]>) {
         let msg = serde_json::to_string(&models::SubscribeMsg {
             event: "subscribe",
             feed,
@@ -75,12 +132,12 @@ impl WebSocket {
         })
         .unwrap();
 
-        info!("subscribe to public feed: {}", feed);
+        info!("subscribe to public feed: {feed}");
 
-        let _ = self.sub_sender.send(OwnedMessage::Text(msg));
+        self.tx.send(Message::Text(msg)).await.unwrap();
     }
 
-    pub fn unsubscribe(&mut self, feed: &str, products: Option<&[&str]>) {
+    pub async fn unsubscribe(&mut self, feed: &str, products: Option<&[&str]>) {
         let msg = serde_json::to_string(&models::SubscribeMsg {
             event: "unsubscribe",
             feed,
@@ -91,16 +148,16 @@ impl WebSocket {
         })
         .unwrap();
 
-        info!("unsubscribe from public feed: {}", feed);
+        info!("unsubscribe from public feed: {feed}");
 
-        let _ = self.sub_sender.send(OwnedMessage::Text(msg));
+        self.tx.send(Message::Text(msg)).await.unwrap();
     }
 
     //// private feeds ////
 
-    pub fn subscribe_private(&mut self, feed: &str) -> Option<()> {
+    pub async fn subscribe_private(&mut self, feed: &str) -> Option<()> {
         if self.challenge.is_none() {
-            self.sign_challenge()?;
+            self.sign_challenge().await?;
         }
 
         let msg = serde_json::to_string(&models::SubscribeMsg {
@@ -113,15 +170,16 @@ impl WebSocket {
         })
         .unwrap();
 
-        info!("subscribe to private feed: {}", feed);
+        info!("subscribe to private feed: {feed}");
 
-        let _ = self.sub_sender.send(OwnedMessage::Text(msg));
+        self.tx.send(Message::Text(msg)).await.unwrap();
+
         None
     }
 
-    pub fn unsubscribe_private(&mut self, feed: &str) -> Option<()> {
+    pub async fn unsubscribe_private(&mut self, feed: &str) -> Option<()> {
         if self.challenge.is_none() {
-            self.sign_challenge()?;
+            self.sign_challenge().await?;
         }
 
         let msg = serde_json::to_string(&models::SubscribeMsg {
@@ -136,48 +194,56 @@ impl WebSocket {
 
         info!("unsubscribe from private feed: {}", feed);
 
-        let _ = self.sub_sender.send(OwnedMessage::Text(msg));
+        self.tx.send(Message::Text(msg)).await.unwrap();
+
         None
     }
 
     // sign challenge request
-    fn sign_challenge(&mut self) -> Option<()> {
-        match (self.keys.as_ref(), self.challenge.as_ref()) {
+    async fn sign_challenge(&mut self) -> Option<()> {
+        match (&self.keys, self.challenge.clone()) {
             (Some(_), Some(_)) => Some(()),
-            (Some((ref pb, ref pv)), None) => {
-                Self::request_challenge(&mut self.sub_sender, pb);
-                let c = self.wait_for_challenge();
-                self.signed_challenge = Some(Self::sign(pv, &c));
-                self.challenge = Some(c);
+            (Some((pb, ref pv)), None) => {
+                let pb = pb.clone();
+                let pv = pv.clone();
+                self.request_challenge(&pb).await;
+                let challenge = self.wait_for_challenge().await;
+                log::debug!("found challenge: {challenge}");
+                self.signed_challenge = Some(Self::sign(&pv, &challenge));
+                self.challenge = Some(challenge);
                 Some(())
             }
             _ => None,
         }
     }
 
-    // blocks until challenge event arrives
-    fn wait_for_challenge(&self) -> String {
-        let mut challenge = String::new();
-
-        info!("waiting for challenge");
-
-        for msg in self.receiver.iter() {
-            if let models::Msg::Challenge(c) = msg {
-                challenge = c.message;
-                break;
-            }
-        }
-        challenge
-    }
-
-    fn request_challenge(sender: &mut Wait<async_mpsc::Sender<OwnedMessage>>, public_key: &str) {
+    async fn request_challenge(&mut self, public_key: &str) {
         let msg = serde_json::to_string(&models::ChallengeMsg {
             event: "challenge",
             api_key: public_key,
         })
         .unwrap();
 
-        let _ = sender.send(OwnedMessage::Text(msg));
+        self.tx.send(Message::Text(msg)).await.unwrap();
+    }
+
+    // waits until challenge event arrives
+    async fn wait_for_challenge(&mut self) -> String {
+        let mut challenge = String::new();
+
+        info!("waiting for challenge");
+
+        while let Some(msg) = self.next_msg().await {
+            match msg {
+                models::Msg::Error(c) if c.event == "challenge" => {
+                    challenge = c.message;
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        challenge
     }
 
     fn hmac(secret: &[u8], data: &[u8]) -> Vec<u8> {
@@ -187,64 +253,15 @@ impl WebSocket {
     }
 
     fn sign(private_key: &str, challenge: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(challenge.as_bytes());
-        let hash = hasher.finalize();
-        let secret_decoded = BASE64_STANDARD.decode(private_key).unwrap();
-        let digest = Self::hmac(&secret_decoded, &hash);
-        BASE64_STANDARD.encode(&*digest)
-    }
-
-    fn listen(
-        &mut self,
-        sender: SyncSender<models::Msg>,
-        sub_receiver: async_mpsc::Receiver<OwnedMessage>,
-    ) {
-        let mut runtime = tokio::runtime::Builder::new()
-            .blocking_threads(1)
-            .core_threads(1)
-            .build()
-            .unwrap();
-
-        // Establish connection to websocket server
-        let client = ClientBuilder::new(&self.ws_url)
-            .unwrap()
-            .async_connect(None)
-            .and_then(move |(duplex, _)| {
-                let (sink, stream) = duplex.split();
-                stream
-                    .timeout(Duration::from_secs(20))
-                    .map_err(|_| WebSocketError::NoDataAvailable)
-                    .filter_map(move |message| match message {
-                        OwnedMessage::Text(data) => {
-                            let _ = serde_json::from_str::<models::Msg>(&data).map(|m| {
-                                let _ = sender.send(m);
-                            });
-                            None
-                        }
-                        OwnedMessage::Ping(data) => Some(OwnedMessage::Pong(data)),
-                        OwnedMessage::Close(e) => Some(OwnedMessage::Close(e)),
-                        _ => None,
-                    })
-                    .select(sub_receiver.map_err(|_| WebSocketError::NoDataAvailable))
-                    .take_while(|x| future::ok(!x.is_close()))
-                    .forward(sink)
-            })
-            .map_err(|_| ())
-            .map(|_| ());
-
-        self.listener = Some(thread::spawn(move || {
-            let _ = runtime.spawn(client);
-            let _ = runtime.shutdown_on_idle().wait();
-        }));
+        let challenge_hash = Sha256::digest(challenge);
+        let secret = BASE64_STANDARD.decode(private_key).unwrap();
+        let digest = Self::hmac(&secret, &challenge_hash);
+        BASE64_STANDARD.encode(digest)
     }
 }
 
 impl Drop for WebSocket {
     fn drop(&mut self) {
-        let _ = self.sub_sender.send(OwnedMessage::Close(None));
-        if let Some(l) = self.listener.take() {
-            let _ = l.join();
-        }
+        drop(self.tx.send(Message::Close(None)));
     }
 }
