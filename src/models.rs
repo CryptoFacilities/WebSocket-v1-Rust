@@ -99,18 +99,41 @@ pub struct Ticker {
     pub index: f64,
     pub last: f64,
     pub time: f64,
+    pub post_only: bool,
+    pub suspended: bool,
+
+    /// Volume in base units.
+    pub volume: f64,
+
+    /// Volume in quote units.
+    #[serde(rename = "volumeQuote")]
+    pub volume_quote: f64,
+
     #[serde(rename = "openInterest")]
     pub open_interest: f64,
+
     #[serde(rename = "markPrice")]
     pub mark_price: f64,
-    #[serde(rename = "fundingRate")]
+
+    /// Timestamp in milliseconds, or 0 for perpetuals.
+    #[serde(rename = "maturityTime")]
+    pub maturity_time: u64,
+
+    #[serde(default)]
     pub funding_rate: Option<f64>,
-    #[serde(rename = "relativeFundingRatePrediction", default)]
-    pub relative_funding_rate_prediction: Option<f64>,
-    #[serde(rename = "fundingRatePrediction", default)]
+
+    #[serde(default)]
+    pub relative_funding_rate: Option<f64>,
+
+    /// Timestamp in milliseconds.
+    #[serde(default)]
+    pub next_funding_rate_time: Option<u64>,
+
+    #[serde(default)]
     pub funding_rate_prediction: Option<f64>,
-    #[serde(rename = "nextFundingRateTime", default)]
-    pub next_funding_rate_time: Option<f64>,
+
+    #[serde(default)]
+    pub relative_funding_rate_prediction: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
