@@ -236,7 +236,7 @@ pub struct DepositsWithdrawals {
 #[derive(Debug, Deserialize)]
 pub struct Fill {
     pub instrument: String,
-    pub time: String,
+    pub time: u64,
     pub price: f64,
     pub seq: u64,
     pub buy: bool,
@@ -244,12 +244,24 @@ pub struct Fill {
     pub order_id: String,
     pub fill_id: String,
     pub fill_type: String,
+    pub fee_currency: String,
+    pub fee_paid: f64,
+    pub order_type: String,
+    pub remaining_order_qty: f64,
+    pub taker_order_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FillsSnapshot {
+    pub feed: String,
+    pub account: String,
+    pub fills: Vec<Fill>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Fills {
     pub feed: String,
-    pub account: String,
+    pub username: String,
     pub fills: Vec<Fill>,
 }
 
@@ -343,6 +355,7 @@ pub enum Msg {
     AccountBalancesAndMargins(AccountBalancesAndMargins),
     AccountLog(AccountLog),
     DepositsWithdrawals(DepositsWithdrawals),
+    FillsSnapshot(FillsSnapshot),
     Fills(Fills),
     OpenPositions(OpenPositions),
     OpenOrders(OpenOrders),

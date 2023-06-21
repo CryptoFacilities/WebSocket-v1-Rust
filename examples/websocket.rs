@@ -69,27 +69,22 @@ async fn main() {
         stop_tx.send(()).unwrap();
     });
 
-    let t = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                Some(msg) = ws.next_msg() => {
-                    info!("{msg:?}");
-                }
+    loop {
+        tokio::select! {
+            Some(msg) = ws.next_msg() => {
+                info!("{msg:?}");
+            }
 
-                _ = &mut stop_rx => {
-                    break;
-                }
+            _ = &mut stop_rx => {
+                break;
+            }
 
-                else => {
-                    log::warn!("else in main ?!?");
-                }
+            else => {
+                log::warn!("else in main ?!?");
             }
         }
+    }
 
-        ws
-    });
-
-    let mut ws = t.await.unwrap();
     unsubscribe_api_tester(&mut ws).await;
 
     log::info!("-----------------------------------------------------------------");
