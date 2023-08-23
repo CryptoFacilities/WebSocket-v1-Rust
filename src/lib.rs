@@ -2,6 +2,8 @@
 
 #![deny(rust_2018_idioms, nonstandard_style, future_incompatible)]
 
+use std::time::Duration;
+
 use base64::prelude::*;
 use futures_util::{SinkExt as _, StreamExt as _};
 use hmac::{Hmac, Mac as _};
@@ -14,6 +16,13 @@ mod models;
 pub use models::*;
 
 type HmacSha512 = Hmac<Sha512>;
+
+/// How frequently to ping on the websocket.
+///
+/// As per [the docs](https://docs.futures.kraken.com/#websocket-api-websocket-api-introduction-subscriptions-keeping-the-connection-alive)
+/// this should be at least once every 60 seconds, so we use of one second less to ensure minor
+/// delays don't result in a closed connection.
+const PING_TIMER: Duration = Duration::from_secs(60 - 1);
 
 pub struct WebSocket {
     tx: mpsc::Sender<Message>,
@@ -92,6 +101,13 @@ impl WebSocket {
                             },
                             Message::Frame(_) => unreachable!("raw frames are not exposed here"),
                         };
+                    }
+
+                    // If we're otherwise sending and receiving messages, there's no need to send
+                    // a new PING. So we start a new one each time we re-enter [`tokio::select`].
+                    _ = tokio::time::sleep(PING_TIMER) => {
+                        log::trace!("Timer expired; sending PING");
+                        ws.send(Message::Ping("PING".into())).await.unwrap();
                     }
 
                     else => {
